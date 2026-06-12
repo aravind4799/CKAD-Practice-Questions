@@ -1,0 +1,21 @@
+apiVersion: apps/v1   # ERROR 1: Deprecated API version
+kind: Deployment
+metadata:
+  name: broken-deploy
+  namespace: q8
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-backend
+  # ERROR 2: Missing the required 'selector' block entirely
+  template:
+    metadata:
+      labels:
+        app: web-backend        # ERROR 3: Mismatched label intent (if trying to align with other selectors)
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80

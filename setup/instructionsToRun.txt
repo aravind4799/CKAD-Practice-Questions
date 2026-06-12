@@ -1,0 +1,2 @@
+kubectl apply -f setup-ckad-practice.yaml - to create the resources based on the questions
+kubectl delete -f setup-ckad-practice.yaml - to delete all the resources after practicing
