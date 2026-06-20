@@ -22,6 +22,12 @@ I am excited to see these questions being used to help the community! These prac
 
 ---
 
+## 🙌 Contributors & Special Thanks
+
+A huge thanks to the members who have directly contributed to making this repository better:
+
+* **Siva Prakash Anupam** ([@anupam-ahi](https://github.com/anupam-ahi)) : Added a local setup workflow via [PR #2](https://github.com/aravind4799/CKAD-Practice-Questions/pull/2). This includes a sample file that allows you to easily create the required resources locally before practicing the questions *(Prerequisite: Docker Desktop must be up and running)*.
+
 ## Table of Contents
 
 - [Question 1 – Create Secret from Hardcoded Variables](#question-1)
