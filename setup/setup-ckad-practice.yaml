@@ -1,0 +1,624 @@
+---
+# ==============================================================================
+# QUESTION 1: Create Secret from Hardcoded Variables
+# Description: Deployment 'api-server' exists with hardcoded env vars.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: q1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      containers:
+      - name: server
+        image: nginx:alpine
+        env:
+        - name: DB_USER
+          value: "admin"
+        - name: DB_PASS
+          value: "Secret123!"
+
+---
+# ==============================================================================
+# QUESTION 2: Create CronJob with Schedule and History Limits
+# Description: Starts clean. Target namespace provided here.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q2
+
+---
+# ==============================================================================
+# QUESTION 3: Create ServiceAccount, Role, and RoleBinding from Logs Error
+# Description: Pod 'log-collector' exists but fails due to authorization.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q3
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-collector
+  namespace: q3
+spec:
+  containers:
+  - name: collector
+    image: busybox:latest
+    command: ["/bin/sh", "-c"]
+    # Simulation: Continuously prints authorization errors into its log stream
+    args:
+    - while true; do
+        echo 'User "system:serviceaccount:q3:default" cannot list pods in the namespace "q3"';
+        sleep 5;
+      done
+
+---
+# ==============================================================================
+# QUESTION 4: Fix Broken Pod with Correct ServiceAccount
+# Description: Pod 'metrics-pod' uses 'wrong-sa' and fails.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q4
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitor-sa
+  namespace: q4
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wrong-sa
+  namespace: q4
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-sa
+  namespace: q4
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: metrics-reader
+  namespace: q4
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: full-access
+  namespace: q4
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: view-only
+  namespace: q4
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: monitor-binding
+  namespace: q4
+subjects:
+- kind: ServiceAccount
+  name: monitor-sa
+  namespace: q4
+roleRef:
+  kind: Role
+  name: metrics-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admin-binding
+  namespace: q4
+subjects:
+- kind: ServiceAccount
+  name: admin-sa
+  namespace: q4
+roleRef:
+  kind: Role
+  name: full-access
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: metrics-pod
+  namespace: q4
+spec:
+  serviceAccountName: wrong-sa
+  containers:
+  - name: metrics-collector
+    image: busybox:latest
+    command: ["/bin/sh", "-c"]
+    args: ["while true; do echo 'Error: Unauthorized to fetch metrics'; sleep 5; done"]
+
+---
+# ==============================================================================
+# QUESTION 5: Build Container Image with Podman and Save as Tarball
+# Note: Host filesystem task. Namespace created for environment separation.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q5
+
+---
+# ==============================================================================
+# QUESTION 6: Create Canary Deployment with Manual Traffic Split
+# Description: Deployment 'web-app' exists with 5 replicas (v1) and service 'web-service'.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q6
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: q6
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: webapp
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: v1
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: v1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: q6
+spec:
+  selector:
+    app: webapp
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# ==============================================================================
+# QUESTION 7: Fix NetworkPolicy by Updating Pod Labels
+# Description: Creates the default-deny and traffic policies, along with the 
+#              3 misconfigured pods inside the 'q7' namespace.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q7
+---
+# 1. Default Deny-All NetworkPolicy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+  namespace: q7
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+# 2. NetworkPolicy: Allow frontend to backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: q7
+spec:
+  podSelector:
+    matchLabels:
+      role: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: frontend
+---
+# 3. NetworkPolicy: Allow backend to database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-db
+  namespace: q7
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: backend
+---
+# 4. Frontend Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+  namespace: q7
+  labels:
+    role: wrong-frontend
+spec:
+  containers:
+  - name: web
+    image: nginx:alpine
+---
+# 5. Backend Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend
+  namespace: q7
+  labels:
+    role: wrong-backend
+spec:
+  containers:
+  - name: app
+    image: nginx:alpine
+---
+# 6. Database Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: database
+  namespace: q7
+  labels:
+    role: wrong-db
+spec:
+  containers:
+  - name: db
+    image: redis:alpine
+---
+# ==============================================================================
+# QUESTION 8: Fix Broken Deployment YAML
+# Description: Deploys the broken state directly into the cluster so you can fix it.
+# Problem: MatchLabels mismatch and system formatting issues.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q8
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-deploy
+  namespace: q8
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: correct-label   # This will create successfully, but simulate the fix via modifying template labels or selectors to match intent
+  template:
+    metadata:
+      labels:
+        app: correct-label # Pre-aligned so the setup manifest applies, but you can alter this to match your scenario debugging practice
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+
+---
+# ==============================================================================
+# QUESTION 9: Perform Rolling Update and Rollback
+# Description: Deploy app version v1, ready for rolling upgrade to v2 and rollback.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q9
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+  namespace: q9
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19
+
+---
+# ==============================================================================
+# QUESTION 10: Add Readiness Probe to Deployment
+# Description: Deployment web-server exists without any probes.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-server
+  namespace: q10
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: web-container
+        image: nginx:alpine
+
+---
+# ==============================================================================
+# QUESTION 11: Configure Pod and Container Security Context
+# Description: Normal running pod that needs specific runAsUser/privileges configured.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q11
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-pod
+  namespace: q11
+spec:
+  containers:
+  - name: ubuntu-container
+    image: ubuntu:latest
+    command: ["/bin/sh", "-c", "sleep 3600"]
+
+---
+# ==============================================================================
+# QUESTION 12: Fix Service Selector
+# Description: Service points to 'wrongapp', Pods are labeled 'webapp'.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q12
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: q12
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+  namespace: q12
+spec:
+  selector:
+    app: wrongapp  # The bug you need to fix
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# ==============================================================================
+# QUESTION 13: Create NodePort Service
+# Description: Deployment 'api-server' exists with app=api and port 9090.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q13
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: q13
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api-container
+        image: nginx:alpine # Simulating application container
+        ports:
+        - containerPort: 9090
+
+---
+# ==============================================================================
+# QUESTION 14: Create Ingress Resource
+# Description: Web deployment and backend service exist.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q14
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deploy
+  namespace: q14
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: web
+        image: nginx:alpine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+  namespace: q14
+spec:
+  selector:
+    app: web
+  ports:
+  - port: 8080
+    targetPort: 80
+
+---
+# ==============================================================================
+# QUESTION 15: Fix Ingress PathType
+# Description: Simulates the target state. The problem specifies a broken input file.
+# You can fix the live cluster object in 'q15' namespace directly.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc
+  namespace: q15
+spec:
+  ports:
+  - port: 8080
+    targetPort: 80
+  selector:
+    app: api
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  namespace: q15
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /api
+        pathType: ImplementationSpecific # Provisioned cleanly to prevent setup crash. Change/verify as needed.
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 8080
+
+---
+---
+# ==============================================================================
+# QUESTION 16: Add Resource Requests and Limits to Pod
+# Description: Pod exists with no resources configured.
+# ==============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: q16
+---
+# Added ResourceQuota to simulate the scenario requirements
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: q16
+spec:
+  hard:
+    limits.cpu: "500m"
+    limits.memory: "512Mi"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-pod
+  namespace: q16
+spec:
+  containers:
+  - name: compute-container
+    image: nginx:latest # Updated from redis:alpine to nginx:latest per instructions
+    resources:
+      requests:
+        cpu: "100m"      # Meets the "at least 100m" requirement
+        memory: "128Mi"  # Meets the "at least 128Mi" requirement
+      limits:
+        cpu: "250m"      # Exactly half of the 500m ResourceQuota limit
+        memory: "256Mi"  # Exactly half of the 512Mi ResourceQuota limit

@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  namespace: q15
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix  # This is the broken value causing the validation failure
+            backend:
+              service:
+                name: api-svc
+                port:
+                  number: 8080
